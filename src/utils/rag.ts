@@ -1,4 +1,29 @@
 import { UserDocument, DocumentChunk, db } from '../db';
+import { createEmbeddingsManager, EmbeddingsManager } from './embeddings';
+
+// Global embeddings manager
+let embeddingsManager: EmbeddingsManager | null = null;
+
+// Initialize embeddings manager
+export async function initializeEmbeddings(
+  providerType: 'openai' | 'cohere' | 'local' | 'simple' = 'simple',
+  apiKey?: string,
+  model?: string
+): Promise<void> {
+  try {
+    embeddingsManager = await createEmbeddingsManager(providerType, apiKey, model);
+    console.log(`Initialized embeddings with provider: ${embeddingsManager.getProviderName()}`);
+  } catch (error) {
+    console.error('Failed to initialize embeddings:', error);
+    // Fallback to simple embeddings
+    embeddingsManager = await createEmbeddingsManager('simple');
+  }
+}
+
+// Get current embeddings manager
+export function getEmbeddingsManager(): EmbeddingsManager | null {
+  return embeddingsManager;
+}
 
 // Simple text chunking utility
 export function chunkText(text: string, chunkSize: number = 1000, overlap: number = 200): string[] {
@@ -46,24 +71,14 @@ export function calculateCosineSimilarity(vecA: number[], vecB: number[]): numbe
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// Simple text embedding (placeholder for real embedding service)
-export function simpleTextEmbedding(text: string): number[] {
-  // This is a simplified embedding - in production, you'd use a real embedding service
-  const words = text.toLowerCase().split(/\s+/);
-  const embedding = new Array(384).fill(0); // 384-dimensional embedding
+// Generate embeddings using the current embeddings manager
+export async function generateEmbeddings(text: string): Promise<number[]> {
+  if (!embeddingsManager) {
+    // Initialize with simple embeddings if not set
+    await initializeEmbeddings('simple');
+  }
   
-  words.forEach((word, index) => {
-    const hash = word.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    const position = Math.abs(hash) % 384;
-    embedding[position] += 1;
-  });
-
-  // Normalize
-  const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-  return embedding.map(val => val / magnitude);
+  return embeddingsManager!.getEmbeddings(text);
 }
 
 // Process document and create chunks
@@ -78,7 +93,7 @@ export async function processDocument(document: UserDocument): Promise<void> {
     // Create new chunks with embeddings
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      const embeddings = simpleTextEmbedding(chunk);
+      const embeddings = await generateEmbeddings(chunk);
       
       await db.documentChunks.add({
         id: crypto.randomUUID(),
@@ -98,14 +113,14 @@ export async function processDocument(document: UserDocument): Promise<void> {
 // Search for relevant chunks
 export async function searchChunks(query: string, limit: number = 5): Promise<DocumentChunk[]> {
   try {
-    const queryEmbedding = simpleTextEmbedding(query);
+    const queryEmbedding = await generateEmbeddings(query);
     const allChunks = await db.documentChunks.toArray();
     
     // Calculate similarities
-    const chunksWithSimilarity = allChunks.map(chunk => ({
+    const chunksWithSimilarity = await Promise.all(allChunks.map(async chunk => ({
       ...chunk,
       similarity: chunk.embeddings ? calculateCosineSimilarity(queryEmbedding, chunk.embeddings) : 0
-    }));
+    })));
     
     // Sort by similarity and return top results
     return chunksWithSimilarity

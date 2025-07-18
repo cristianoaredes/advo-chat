@@ -46,6 +46,7 @@ import { SettingsModal } from "./SettingsModal";
 import { Agents } from "./Agents";
 import { Documents } from "./Documents";
 import { LearningAnalytics } from "./LearningAnalytics";
+import { Workflows } from "./Workflows";
 import { config } from "../utils/config";
 
 declare global {
@@ -57,7 +58,7 @@ declare global {
 export function Layout() {
   const theme = useMantineTheme();
   const [opened, setOpened] = useState(false);
-  const [tab, setTab] = useState<"Chats" | "Prompts" | "Agents" | "Documents" | "Analytics">("Chats");
+  const [tab, setTab] = useState<"Chats" | "Prompts" | "Agents" | "Documents" | "Analytics" | "Workflows">("Chats");
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const navigate = useNavigate();
   const router = useRouter();
@@ -138,6 +139,7 @@ export function Layout() {
                 { value: "Agents", label: "Agents" },
                 { value: "Documents", label: "Docs" },
                 { value: "Analytics", label: "Analytics" },
+                { value: "Workflows", label: "Workflows" },
               ]}
             />
             <Box sx={{ padding: 4 }}>
@@ -200,6 +202,7 @@ export function Layout() {
             {tab === "Agents" && <Agents />}
             {tab === "Documents" && <Documents />}
             {tab === "Analytics" && <LearningAnalytics />}
+            {tab === "Workflows" && <Workflows />}
           </Navbar.Section>
           <Navbar.Section sx={{ borderTop: border }} p="xs">
             <Center>
