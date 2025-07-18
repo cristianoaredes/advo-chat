@@ -12,6 +12,8 @@ import {
   Stack,
   SegmentedControl,
   Textarea,
+  Badge,
+  Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -19,13 +21,15 @@ import { nanoid } from "nanoid";
 import { KeyboardEvent, useState, type ChangeEvent, useEffect } from "react";
 import { AiOutlineSend } from "react-icons/ai";
 import { MessageItem } from "../components/MessageItem";
-import { db } from "../db";
+import { db, Agent } from "../db";
 import { useChatId } from "../hooks/useChatId";
 import { config } from "../utils/config";
 import {
   createChatCompletion,
   createStreamChatCompletion,
 } from "../utils/openai";
+import { getRelevantContext } from "../utils/rag";
+import { trackUserPreferences } from "../utils/learning";
 
 export function ChatRoute() {
   const chatId = useChatId();
@@ -50,6 +54,11 @@ export function ChatRoute() {
     return db.chats.get(chatId);
   }, [chatId]);
 
+  // Agent selection
+  const agents = useLiveQuery(() => db.agents.where('isActive').equals(true).toArray());
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [useRAG, setUseRAG] = useState(true);
+
   const [writingCharacter, setWritingCharacter] = useState<string | null>(null);
   const [writingTone, setWritingTone] = useState<string | null>(null);
   const [writingStyle, setWritingStyle] = useState<string | null>(null);
@@ -57,14 +66,21 @@ export function ChatRoute() {
 
   const getSystemMessage = () => {
     const message: string[] = [];
-    if (writingCharacter) message.push(`You are ${writingCharacter}.`);
-    if (writingTone) message.push(`Respond in ${writingTone} tone.`);
-    if (writingStyle) message.push(`Respond in ${writingStyle} style.`);
-    if (writingFormat) message.push(writingFormat);
-    if (message.length === 0)
-      message.push(
-        "You are ChatGPT, a large language model trained by OpenAI."
-      );
+    
+    // Use selected agent's system prompt if available
+    if (selectedAgent) {
+      message.push(selectedAgent.systemPrompt);
+    } else {
+      if (writingCharacter) message.push(`You are ${writingCharacter}.`);
+      if (writingTone) message.push(`Respond in ${writingTone} tone.`);
+      if (writingStyle) message.push(`Respond in ${writingStyle} style.`);
+      if (writingFormat) message.push(writingFormat);
+      if (message.length === 0)
+        message.push(
+          "You are ChatGPT, a large language model trained by OpenAI."
+        );
+    }
+    
     return message.join(" ");
   };
 
@@ -102,6 +118,9 @@ export function ChatRoute() {
     try {
       setSubmitting(true);
 
+      // Track user preferences
+      await trackUserPreferences(chatId, content);
+
       await db.messages.add({
         id: nanoid(),
         chatId,
@@ -120,12 +139,26 @@ export function ChatRoute() {
         createdAt: new Date(),
       });
 
+      // Get RAG context if enabled
+      let contextMessage = "";
+      if (useRAG) {
+        const relevantContext = await getRelevantContext(content);
+        if (relevantContext) {
+          contextMessage = `\n\nRelevant context from your knowledge base:\n${relevantContext}\n\nPlease use this context to provide a more informed response.`;
+        }
+      }
+
+      const systemMessage = getSystemMessage();
+      const enhancedSystemMessage = contextMessage 
+        ? `${systemMessage}\n\n${contextMessage}`
+        : systemMessage;
+
       await createStreamChatCompletion(
         apiKey,
         [
           {
             role: "system",
-            content: getSystemMessage(),
+            content: enhancedSystemMessage,
           },
           ...(messages ?? []).map((message) => ({
             role: message.role,
@@ -311,55 +344,96 @@ export function ChatRoute() {
         }
         <Container>
           {messages?.length === 0 && (
-            <SimpleGrid
-              mb="sm"
-              spacing="xs"
-              breakpoints={[
-                { minWidth: "sm", cols: 4 },
-                { maxWidth: "sm", cols: 2 },
-              ]}
-            >
-              <Select
-                value={writingCharacter}
-                onChange={setWritingCharacter}
-                data={config.writingCharacters}
-                placeholder="Character"
-                variant="filled"
-                searchable
-                clearable
-                sx={{ flex: 1 }}
-              />
-              <Select
-                value={writingTone}
-                onChange={setWritingTone}
-                data={config.writingTones}
-                placeholder="Tone"
-                variant="filled"
-                searchable
-                clearable
-                sx={{ flex: 1 }}
-              />
-              <Select
-                value={writingStyle}
-                onChange={setWritingStyle}
-                data={config.writingStyles}
-                placeholder="Style"
-                variant="filled"
-                searchable
-                clearable
-                sx={{ flex: 1 }}
-              />
-              <Select
-                value={writingFormat}
-                onChange={setWritingFormat}
-                data={config.writingFormats}
-                placeholder="Format"
-                variant="filled"
-                searchable
-                clearable
-                sx={{ flex: 1 }}
-              />
-            </SimpleGrid>
+            <Stack spacing="xs">
+              {/* Agent and RAG Controls */}
+              <Group spacing="xs">
+                <Select
+                  value={selectedAgent?.id || ''}
+                  onChange={(value) => {
+                    const agent = agents?.find(a => a.id === value);
+                    setSelectedAgent(agent || null);
+                  }}
+                  data={agents?.map(agent => ({ value: agent.id, label: agent.name })) || []}
+                  placeholder="Select Agent (Optional)"
+                  variant="filled"
+                  searchable
+                  clearable
+                  sx={{ flex: 1 }}
+                />
+                <Button
+                  variant={useRAG ? "filled" : "outline"}
+                  size="sm"
+                  onClick={() => setUseRAG(!useRAG)}
+                  color={useRAG ? "blue" : "gray"}
+                >
+                  RAG {useRAG ? "ON" : "OFF"}
+                </Button>
+              </Group>
+              
+              {/* Agent Info */}
+              {selectedAgent && (
+                <Card withBorder p="xs">
+                  <Group spacing="xs">
+                    <Badge color="blue" variant="light">
+                      {selectedAgent.name}
+                    </Badge>
+                    <Text size="xs" c="dimmed">
+                      {selectedAgent.description}
+                    </Text>
+                  </Group>
+                </Card>
+              )}
+
+              {/* Writing Controls */}
+              <SimpleGrid
+                spacing="xs"
+                breakpoints={[
+                  { minWidth: "sm", cols: 4 },
+                  { maxWidth: "sm", cols: 2 },
+                ]}
+              >
+                <Select
+                  value={writingCharacter}
+                  onChange={setWritingCharacter}
+                  data={config.writingCharacters}
+                  placeholder="Character"
+                  variant="filled"
+                  searchable
+                  clearable
+                  sx={{ flex: 1 }}
+                />
+                <Select
+                  value={writingTone}
+                  onChange={setWritingTone}
+                  data={config.writingTones}
+                  placeholder="Tone"
+                  variant="filled"
+                  searchable
+                  clearable
+                  sx={{ flex: 1 }}
+                />
+                <Select
+                  value={writingStyle}
+                  onChange={setWritingStyle}
+                  data={config.writingStyles}
+                  placeholder="Style"
+                  variant="filled"
+                  searchable
+                  clearable
+                  sx={{ flex: 1 }}
+                />
+                <Select
+                  value={writingFormat}
+                  onChange={setWritingFormat}
+                  data={config.writingFormats}
+                  placeholder="Format"
+                  variant="filled"
+                  searchable
+                  clearable
+                  sx={{ flex: 1 }}
+                />
+              </SimpleGrid>
+            </Stack>
           )}
           <Flex gap="sm">
             <Textarea

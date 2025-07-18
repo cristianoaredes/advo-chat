@@ -27,6 +27,9 @@ import {
   IconSettings,
   IconSunHigh,
   IconX,
+  IconBrain,
+  IconFileText,
+  IconChartLine,
 } from "@tabler/icons-react";
 import { Link, Outlet, useNavigate, useRouter } from "@tanstack/react-location";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -40,6 +43,9 @@ import { DatabaseModal } from "./DatabaseModal";
 import { LogoText } from "./Logo";
 import { Prompts } from "./Prompts";
 import { SettingsModal } from "./SettingsModal";
+import { Agents } from "./Agents";
+import { Documents } from "./Documents";
+import { LearningAnalytics } from "./LearningAnalytics";
 import { config } from "../utils/config";
 
 declare global {
@@ -51,7 +57,7 @@ declare global {
 export function Layout() {
   const theme = useMantineTheme();
   const [opened, setOpened] = useState(false);
-  const [tab, setTab] = useState<"Chats" | "Prompts">("Chats");
+  const [tab, setTab] = useState<"Chats" | "Prompts" | "Agents" | "Documents" | "Analytics">("Chats");
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const navigate = useNavigate();
   const router = useRouter();
@@ -126,7 +132,13 @@ export function Layout() {
               fullWidth
               value={tab}
               onChange={(value) => setTab(value as typeof tab)}
-              data={["Chats", "Prompts"]}
+              data={[
+                { value: "Chats", label: "Chats" },
+                { value: "Prompts", label: "Prompts" },
+                { value: "Agents", label: "Agents" },
+                { value: "Documents", label: "Docs" },
+                { value: "Analytics", label: "Analytics" },
+              ]}
             />
             <Box sx={{ padding: 4 }}>
               {tab === "Chats" && (
@@ -185,6 +197,9 @@ export function Layout() {
             {tab === "Prompts" && (
               <Prompts search={search} onPlay={() => setTab("Chats")} />
             )}
+            {tab === "Agents" && <Agents />}
+            {tab === "Documents" && <Documents />}
+            {tab === "Analytics" && <LearningAnalytics />}
           </Navbar.Section>
           <Navbar.Section sx={{ borderTop: border }} p="xs">
             <Center>
