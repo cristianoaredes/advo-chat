@@ -18,6 +18,7 @@ import { cloneElement, ReactElement, useEffect, useState } from "react";
 import { db } from "../db";
 import { config } from "../utils/config";
 import { checkOpenAIKey } from "../utils/openai";
+import { AdvancedSettings } from "./AdvancedSettings";
 
 export function SettingsModal({ children }: { children: ReactElement }) {
   const [opened, { open, close }] = useDisclosure(false);
@@ -29,6 +30,7 @@ export function SettingsModal({ children }: { children: ReactElement }) {
   const [auth, setAuth] = useState(config.defaultAuth);
   const [base, setBase] = useState("");
   const [version, setVersion] = useState("");
+  const [activeTab, setActiveTab] = useState<'general' | 'advanced'>('general');
 
   const settings = useLiveQuery(async () => {
     return db.settings.where({ id: "general" }).first();
@@ -60,6 +62,22 @@ export function SettingsModal({ children }: { children: ReactElement }) {
       {cloneElement(children, { onClick: open })}
       <Modal opened={opened} onClose={close} title="Settings" size="lg">
         <Stack>
+          <Group>
+            <Button
+              variant={activeTab === 'general' ? 'filled' : 'subtle'}
+              onClick={() => setActiveTab('general')}
+            >
+              General
+            </Button>
+            <Button
+              variant={activeTab === 'advanced' ? 'filled' : 'subtle'}
+              onClick={() => setActiveTab('advanced')}
+            >
+              Advanced
+            </Button>
+          </Group>
+
+          {activeTab === 'general' && (
           <form
             onSubmit={async (event) => {
               try {
@@ -335,6 +353,11 @@ export function SettingsModal({ children }: { children: ReactElement }) {
               </Button>
             </Flex>
           </form>
+          )}
+          
+          {activeTab === 'advanced' && (
+            <AdvancedSettings />
+          )}
         </Stack>
       </Modal>
     </>

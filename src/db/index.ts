@@ -35,19 +35,109 @@ export interface Settings {
   openAiApiVersion?: string;
 }
 
+// New interfaces for agents and RAG
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  capabilities: string[];
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UserDocument {
+  id: string;
+  title: string;
+  content: string;
+  type: 'pdf' | 'doc' | 'webpage' | 'text';
+  source: string;
+  metadata?: Record<string, any>;
+  embeddings?: number[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DocumentChunk {
+  id: string;
+  documentId: string;
+  content: string;
+  embeddings?: number[];
+  chunkIndex: number;
+  createdAt: Date;
+}
+
+export interface LearningSession {
+  id: string;
+  chatId: string;
+  agentId?: string;
+  userFeedback: 'positive' | 'negative' | 'neutral';
+  feedbackNotes?: string;
+  responseQuality: number; // 1-10 scale
+  createdAt: Date;
+}
+
+export interface AgentPerformance {
+  id: string;
+  agentId: string;
+  totalInteractions: number;
+  averageResponseQuality: number;
+  userSatisfactionScore: number;
+  lastUsed: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  action: string;
+  resource: string;
+  resourceId: string;
+  details: any;
+  ipAddress: string;
+  userAgent: string;
+  timestamp: Date;
+  success: boolean;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'manager' | 'user' | 'viewer';
+  createdAt: Date;
+  lastActive: Date;
+}
+
 export class Database extends Dexie {
   chats!: Table<Chat>;
   messages!: Table<Message>;
   prompts!: Table<Prompt>;
   settings!: Table<Settings>;
+  agents!: Table<Agent>;
+  userDocuments!: Table<UserDocument>;
+  documentChunks!: Table<DocumentChunk>;
+  learningSessions!: Table<LearningSession>;
+  agentPerformance!: Table<AgentPerformance>;
+  auditLogs!: Table<AuditLog>;
+  users!: Table<User>;
 
   constructor() {
     super("chatpad");
-    this.version(2).stores({
+    this.version(4).stores({
       chats: "id, createdAt",
       messages: "id, chatId, createdAt",
       prompts: "id, createdAt",
       settings: "id",
+      agents: "id, isActive, createdAt",
+      userDocuments: "id, type, createdAt",
+      documentChunks: "id, documentId, chunkIndex, createdAt",
+      learningSessions: "id, chatId, agentId, createdAt",
+      agentPerformance: "id, agentId, lastUsed, createdAt",
+      auditLogs: "id, userId, action, timestamp",
+      users: "id, email, role, createdAt",
     });
 
     this.on("populate", async () => {
@@ -60,7 +150,52 @@ export class Database extends Dexie {
         ...(config.defaultBase != '' && { openAiApiBase: config.defaultBase }),
         ...(config.defaultVersion != '' && { openAiApiVersion: config.defaultVersion }),
       });
+
+      // Initialize default agents
+      await this.initializeDefaultAgents();
     });
+  }
+
+  private async initializeDefaultAgents() {
+    const defaultAgents: Omit<Agent, 'id' | 'createdAt' | 'updatedAt'>[] = [
+      {
+        name: "Research Assistant",
+        description: "Specialized in research, analysis, and information gathering",
+        systemPrompt: "You are a research assistant. Your role is to help users find, analyze, and synthesize information from various sources. Always provide well-researched, accurate information with proper citations when possible.",
+        capabilities: ["research", "analysis", "synthesis", "citation"],
+        isActive: true,
+      },
+      {
+        name: "Writing Coach",
+        description: "Expert in writing, editing, and content creation",
+        systemPrompt: "You are a writing coach and editor. Help users improve their writing by providing constructive feedback, suggestions for clarity and style, and guidance on structure and flow.",
+        capabilities: ["writing", "editing", "style", "structure"],
+        isActive: true,
+      },
+      {
+        name: "Code Assistant",
+        description: "Specialized in programming, debugging, and technical solutions",
+        systemPrompt: "You are a programming assistant. Help users write, debug, and optimize code. Provide clear explanations, best practices, and practical solutions for technical problems.",
+        capabilities: ["programming", "debugging", "optimization", "best-practices"],
+        isActive: true,
+      },
+      {
+        name: "Creative Partner",
+        description: "Focused on creative ideation, brainstorming, and artistic projects",
+        systemPrompt: "You are a creative partner. Help users brainstorm ideas, develop creative concepts, and explore artistic and innovative solutions. Encourage out-of-the-box thinking.",
+        capabilities: ["ideation", "brainstorming", "creativity", "innovation"],
+        isActive: true,
+      }
+    ];
+
+    for (const agent of defaultAgents) {
+      await this.agents.add({
+        ...agent,
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
   }
 }
 
