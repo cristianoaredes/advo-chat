@@ -47,6 +47,7 @@ import { Agents } from "./Agents";
 import { Documents } from "./Documents";
 import { LearningAnalytics } from "./LearningAnalytics";
 import { Workflows } from "./Workflows";
+import { AdvancedAnalytics } from "./AdvancedAnalytics";
 import { config } from "../utils/config";
 
 declare global {
@@ -58,7 +59,7 @@ declare global {
 export function Layout() {
   const theme = useMantineTheme();
   const [opened, setOpened] = useState(false);
-  const [tab, setTab] = useState<"Chats" | "Prompts" | "Agents" | "Documents" | "Analytics" | "Workflows">("Chats");
+  const [tab, setTab] = useState<"Chats" | "Prompts" | "Agents" | "Documents" | "Analytics" | "Workflows" | "AdvancedAnalytics">("Chats");
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const navigate = useNavigate();
   const router = useRouter();
@@ -140,6 +141,7 @@ export function Layout() {
                 { value: "Documents", label: "Docs" },
                 { value: "Analytics", label: "Analytics" },
                 { value: "Workflows", label: "Workflows" },
+                { value: "AdvancedAnalytics", label: "Advanced" },
               ]}
             />
             <Box sx={{ padding: 4 }}>
@@ -203,6 +205,7 @@ export function Layout() {
             {tab === "Documents" && <Documents />}
             {tab === "Analytics" && <LearningAnalytics />}
             {tab === "Workflows" && <Workflows />}
+            {tab === "AdvancedAnalytics" && <AdvancedAnalytics />}
           </Navbar.Section>
           <Navbar.Section sx={{ borderTop: border }} p="xs">
             <Center>

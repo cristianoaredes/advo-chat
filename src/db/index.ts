@@ -89,6 +89,28 @@ export interface AgentPerformance {
   updatedAt: Date;
 }
 
+export interface AuditLog {
+  id: string;
+  userId: string;
+  action: string;
+  resource: string;
+  resourceId: string;
+  details: any;
+  ipAddress: string;
+  userAgent: string;
+  timestamp: Date;
+  success: boolean;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'manager' | 'user' | 'viewer';
+  createdAt: Date;
+  lastActive: Date;
+}
+
 export class Database extends Dexie {
   chats!: Table<Chat>;
   messages!: Table<Message>;
@@ -99,10 +121,12 @@ export class Database extends Dexie {
   documentChunks!: Table<DocumentChunk>;
   learningSessions!: Table<LearningSession>;
   agentPerformance!: Table<AgentPerformance>;
+  auditLogs!: Table<AuditLog>;
+  users!: Table<User>;
 
   constructor() {
     super("chatpad");
-    this.version(3).stores({
+    this.version(4).stores({
       chats: "id, createdAt",
       messages: "id, chatId, createdAt",
       prompts: "id, createdAt",
@@ -112,6 +136,8 @@ export class Database extends Dexie {
       documentChunks: "id, documentId, chunkIndex, createdAt",
       learningSessions: "id, chatId, agentId, createdAt",
       agentPerformance: "id, agentId, lastUsed, createdAt",
+      auditLogs: "id, userId, action, timestamp",
+      users: "id, email, role, createdAt",
     });
 
     this.on("populate", async () => {
